@@ -47,7 +47,7 @@ instacart %>%
     geom_point() + labs(
       title = "Items Ordered per Grocery Aisle", 
       x = "Aisle ID",
-      y = "Number of Orders")
+      y = "Number of Orders") 
 
 ```
 
