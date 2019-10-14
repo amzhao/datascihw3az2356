@@ -13,6 +13,10 @@ Loading the instacart data & looking at the contents & structure:
 ```{r}
 library(tidyverse)
 library(p8105.datasets)
+library(ggplot2)
+library(devtools)
+install_github("thomasp85/patchwork")
+library(patchwork)
 data("instacart")
 
 instacart %>% 
@@ -94,36 +98,128 @@ instacart %>%
 
 
 
-
-
-
-
-
-
-
-
-
-
 # Problem 2
+
+Data from the Behavioral Risk Factors Surveillance System for Selected Metropolitan Area Risk Trends (SMART) for 2002-2010.
+Cleaning the data:
 ```{r}
 
 library(p8105.datasets)
 data("brfss_smart2010")
 
+brfss <-
+  brfss_smart2010 %>% 
+  janitor::clean_names(case = c("snake")) %>% 
+  rename(
+    state = locationabbr,
+    county = locationdesc,
+    estimate = data_value,
+    estimate_type = data_value_type
+  ) %>% 
+  select(-location_id) %>% 
+  group_by(topic) %>% 
+  filter(response == "Excellent" | response == "Very good" | response == "Good" | response == "Fair" | response == "Poor") %>% 
+  mutate(
+    response = factor(response, levels = c("Poor", "Fair", "Good", "Very good", "Excellent"))
+  )
 
 
+brfss %>% 
+  group_by(year, state) %>% 
+  summarize(n = n_distinct(county)) %>% 
+  filter(year == 2002, n > 6) 
+
+brfss %>% 
+  group_by(year, state) %>% 
+  summarize(n = n_distinct(county)) %>% 
+  filter(year == 2010, n > 6) 
 
 ```
 
+In 2002, there were 6 states that were observed at 7 or more locations, compared to 14 states in 2010. 
+
+
+
+```{r}
+
+excellent <- 
+  brfss %>% 
+  filter(response == "Excellent") %>% 
+  group_by(state, year) %>% 
+  mutate(
+    avgest = mean(estimate),
+    avgest = round(avgest, digits = 2)
+  ) %>% 
+  select(year, state, avgest)
+
+ggplot(data = excellent, aes(x = year, y = avgest, group = state, colour = state)) + geom_point() + geom_line() + labs(
+      x = "Year",
+      y = "Average estimate") 
+
+plot1 = 
+  brfss %>% 
+  group_by(response) %>% 
+  filter(year == 2006, state == "NY") %>% 
+  ggplot(aes(x = response, y = estimate, color = response)) + geom_boxplot() + theme(legend.position = "none")
+
+plot2 = 
+  brfss %>% 
+  group_by(response) %>% 
+  filter(year == 2010, state == "NY") %>% 
+  ggplot(aes(x = response, y = estimate, color = response)) + geom_boxplot() + theme(legend.position = "bottom")
+
+(plot1 + plot2)
+```
 
 
 
 # Problem 3
+
+Loading, tidying, wrangling the data:
 ```{r}
 "./data/accel_data.csv"
 
 accel <- 
-  read_csv("data/accel_data.csv")
+  read_csv("data/accel_data.csv") %>% 
+  rename('dayofwk' = day, studyday = day_id) %>% 
+  mutate(wkdaywkend = case_when(
+      dayofwk == "Monday" ~ "weekday",
+      dayofwk == "Tuesday" ~ "weekday",
+      dayofwk == "Wednesday" ~ "weekday",
+      dayofwk == "Thursday" ~ "weekday",
+      dayofwk == "Friday" ~ "weekday",
+      dayofwk == "Saturday" ~ "weekend",
+      dayofwk == "Sunday" ~ "weekend"
+      )) %>% 
+  mutate_if(is.numeric, round, digits = 2) %>% 
+  janitor::clean_names(dat = ., case = c("snake")) 
 
 ```
+The accelerometer dataset contains activity data from every minute of the day for 35 days for one individual aged 63 with BMI 25. Additionally, there are variables for the day of the week, as well as whether the day was a weekend or weekday. 
+
+```{r}
+
+plotdata = 
+  accel %>% 
+  pivot_longer(activity_1:activity_1440,
+              names_to = "activity_minute",
+               values_to = "activity") %>% 
+    group_by(studyday, dayofwk) %>% 
+  summarise(daily = sum(activity))
+
+
+  ggplot(data = plotdata, aes(x = studyday, y = daily, color = dayofwk)) + geom_point() + scale_x_continuous(breaks = c(7, 14, 21, 28, 35)) 
+
+plotdata %>% 
+  knitr::kable()
+``` 
+
+
+Based on the daily total activity data presented in the table, there don't seem to be any trends present. This man's activity fluctuates greatly, from 1440 on a Saturday to 685910 on a Monday! 
+
+
+Additionally, based on the plot showing the 24-hour activity time courses for each day, there doesn't seem to be a consistent relationship between day of the week and activity. On Tuesdays, shown in purple on the plot, our guy seems to typically have the same amount of activity, but on Mondays (shown in burnt yellow) and Saturdays (shown in dark green), his activity fluctuates greatly. In particular, he had two lazy Saturdays in the 4th and 5th weeks of observation. Or, he could have forgotten to wear the accelerometer on these days. I'll choose to believe that he had lazy Saturdays and live vicariously through him. 
+
+
+
 
